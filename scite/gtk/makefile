@@ -118,7 +118,6 @@ install:
 	done
 	
 	for files in `cd ../custom && find . -type f`; do \
-		echo $(INSTALL) -D -m 644 ../custom/$$files $(DESTDIR)$(SYSCONF_PATH)/$$files; \
 		$(INSTALL) -D -m 644 ../custom/$$files $(DESTDIR)$(SYSCONF_PATH)/$$files; \
 	done
 
