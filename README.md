@@ -7,6 +7,7 @@ This is a modified SciTE editor, which includes the following:
 * [Scintillua][] by Mitchell Foral - modification of Scintilla to use [LPEG][] based parser.
 * [SciTE-tools][] by Mitchell Foral - useful text-editing utilities and modifications to SciTE.
 * [SciteDebug][] by Steve Donovan - allows to debug [Lua][] and C/C++ programs in SciTE
+* [Incremental Autocomplete patch][incautcomp] by Sergey Kishchenko - autocomplete shows up without while editing the text without the need to press any special key.
 
 The editor is built using the latest version of these projects by Mar 27, 2010.
 
@@ -21,6 +22,7 @@ The latest version can be found at [the repository](http://github.com/mkottman/s
 [lpeg]: http://www.inf.puc-rio.br/~roberto/lpeg/lpeg.html	"LPEG"
 [scite-tools]: http://caladbolg.net/scite.php				"SciTE-tools"
 [scitedebug]: http://scitedebug.luaforge.net/				"SciteDebug"
+[incautcomp]: http://groups.google.com/group/scite-interest/browse_thread/thread/87ba9fd13989ae84
 
 Dependencies and modifications
 ==============================
