@@ -26,7 +26,9 @@ Dependencies and modifications
 ==============================
 
 I removed the [Lua][] interpreter from SciTE source and modified the makefile to use existing Lua interpreter.
-You can also use [LuaJIT][] by compilig SciTE with `make USE_LUAJIT=1`.
+You can also use [LuaJIT][] by compilig SciTE with `make USE_LUAJIT=1`. Also, the [LPEG][] library is
+removed froum source, you need to have it installed in your system in a way accessible to Lua (ie. 
+in package.cpath).
 
 I also modified some default values in SciTEGlobal.properties, if you do not like them, feel free to
 edit/remove them.
@@ -34,9 +36,10 @@ edit/remove them.
 [Extman.lua][extman] from [SciteDebug][] is modified to call modules in [SciTE-tools][], and modules
 in [SciTE-tools][] are modified to co-exist with [extman.lua][extman].
 
-You can add your custom Lua scripts 
+You can add your custom Lua scripts for extman to the folder `$(SciteDefaultHome)/scite-debug/scite_lua`,
+like the ones from [this repository](http://github.com/mkottman/scite_scripts).
 
-[lua]: http://www.lua.org/							"Lua"
+[lua]: http://www.lua.org/						"Lua"
 [luajit]: http://luajit.org/					"LuaJIT"
 [extman]: http://lua-users.org/wiki/SciteExtMan "Extman"
 
