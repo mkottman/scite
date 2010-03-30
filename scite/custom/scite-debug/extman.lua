@@ -717,6 +717,16 @@ for i,dir in ipairs(dirs) do
     load_script_list(scite_Files(dir..dirsep..'*.lua'),dir)
 end
 
+local custom_path = scite_GetProp('ext.lua.custom.dir')
+if custom_path then
+    local script_list = scite_Files(custom_path..dirsep..'*.lua')
+    load_script_list(script_list,custom_path)
+    local dirs = scite_Directories(custom_path,'^_')
+    for i,dir in ipairs(dirs) do
+        load_script_list(scite_Files(dir..dirsep..'*.lua'),dir)
+    end
+end
+
 function scite_WordAtPos(pos)
     if not pos then pos = editor.CurrentPos end
     local p2 = editor:WordEndPosition(pos,true)
