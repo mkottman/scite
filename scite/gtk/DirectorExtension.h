@@ -7,7 +7,7 @@
 
 class DirectorExtension : public Extension {
 private:
-	DirectorExtension() {} // Singleton
+	DirectorExtension() : inputWatcher(-1) {} // Singleton
 	DirectorExtension(const DirectorExtension &); // Disable copy ctor
 	void operator=(const DirectorExtension &);    // Disable operator=
 
@@ -27,7 +27,7 @@ public:
 	virtual bool OnExecute(const char *s);
 	virtual bool OnSavePointReached();
 	virtual bool OnSavePointLeft();
-	virtual bool OnStyle(unsigned int startPos, int lengthDoc, int initStyle, Accessor *styler);
+	virtual bool OnStyle(unsigned int startPos, int lengthDoc, int initStyle, StyleWriter *styler);
 	virtual bool OnDoubleClick();
 	virtual bool OnUpdateUI();
 	virtual bool OnMarginClick();

@@ -20,15 +20,15 @@
 #include <string>
 #include <map>
 
-#include "Platform.h"
-
-#if PLAT_GTK
+#if defined(GTK)
 
 #include <unistd.h>
 
 #endif
 
-#include "PropSet.h"
+#include "Scintilla.h"
+
+#include "GUI.h"
 
 #include "SString.h"
 #include "FilePath.h"
@@ -274,7 +274,7 @@ bool PropSetFile::ReadLine(const char *lineBuffer, bool ifIsTrue, FilePath direc
 	} else if (isPrefix(lineBuffer, "import ") && directoryForImports.IsSet()) {
 		SString importName(lineBuffer + strlen("import") + 1);
 		importName += ".properties";
-		FilePath importPath(directoryForImports, FilePath(importName.c_str()));
+		FilePath importPath(directoryForImports, FilePath(GUI::StringFromUTF8(importName.c_str())));
 		if (Read(importPath, directoryForImports, imports, sizeImports)) {
 			if (imports) {
 				for (int i = 0; i < sizeImports; i++) {

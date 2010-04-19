@@ -32,6 +32,7 @@ endif # added by Mitchell
 
 PROG	= ../bin/SciTE.exe
 PROGSTATIC = ../bin/Sc1.exe
+WIDEFLAGS=-DUNICODE -D_UNICODE
 
 ifndef NOTHUNKS
 gversion = $(word 1,$(subst ., ,$(shell g++ --version)))
@@ -69,7 +70,7 @@ LUA_INCLUDES = -I ../lua/include
 INCLUDEDIRS=-I ../../scintilla/include -I ../../scintilla/src -I ../../scintilla/win32 -I ../src $(LUA_INCLUDES) # modified by Mitchell
 RCINCLUDEDIRS=--include-dir ../../scintilla/win32 --include-dir ../src
 
-CBASEFLAGS = -W -Wall $(INCLUDEDIRS) $(LUA_DEFINES) -mno-cygwin
+CBASEFLAGS = -W -Wall $(INCLUDEDIRS) $(LUA_DEFINES) $(WIDEFLAGS) -mno-cygwin
 
 ifdef DEBUG
 CFLAGS=-DDEBUG -g $(CBASEFLAGS)
@@ -90,9 +91,9 @@ LDFLAGS=-mwindows -lcomctl32 -limm32 -lole32 -luuid $(LUA_LDFLAGS) -mno-cygwin
 
 OTHER_OBJS	= FilePath.o SciTEBuffers.o SciTEIO.o Exporters.o PropSetFile.o StringList.o \
 SciTEProps.o SciTEWin.o SciTEWinBar.o SciTEWinDlg.o MultiplexExtension.o \
-UniqueInstance.o WindowAccessor.o \
-PlatWin.o UniConversion.o Utf8_16.o SciTERes.o \
-IFaceTable.o DirectorExtension.o JobQueue.o WinMutex.o XPM.o $(LUA_OBJS)
+StyleWriter.o UniqueInstance.o \
+Utf8_16.o SciTERes.o GUIWin.o \
+IFaceTable.o DirectorExtension.o JobQueue.o WinMutex.o $(LUA_OBJS)
 
 OBJS = SciTEBase.o $(OTHER_OBJS)
 
@@ -286,12 +287,12 @@ $(PROG): $(OBJS)
 	$(CC) $(STRIPFLAG) -Xlinker --subsystem -Xlinker windows -o  $@ $^ $(LDFLAGS)
 
 OBJSSTATIC = Sc1.o SciTEWinBar.o SciTEWinDlg.o MultiplexExtension.o \
-	UniqueInstance.o SciTEBase.o FilePath.o SciTEBuffers.o \
+	StyleWriter.o UniqueInstance.o SciTEBase.o FilePath.o SciTEBuffers.o \
 	SciTEIO.o Exporters.o PropSetFile.o StringList.o SciTEProps.o ScintillaWinL.o \
 	ScintillaBaseL.o Editor.o WindowAccessor.o DocumentAccessor.o KeyWords.o \
 	ExternalLexer.o StyleContext.o Lexers.a PropSet.o RunStyles.o \
 	ContractionState.o CharClassify.o Decoration.o Document.o CellBuffer.o CallTip.o Sc1Res.o PlatWin.o \
-	PositionCache.o UniConversion.o Utf8_16.o KeyMap.o Indicator.o LineMarker.o RESearch.o Selection.o Style.o \
+	PositionCache.o UniConversion.o Utf8_16.o GUIWin.o KeyMap.o Indicator.o LineMarker.o RESearch.o Selection.o Style.o \
 	ViewStyle.o AutoComplete.o IFaceTable.o DirectorExtension.o MultiplexExtension.o XPM.o PerLine.o \
 	JobQueue.o WinMutex.o $(LUA_OBJS)
 
@@ -305,12 +306,12 @@ Sc1.o: SciTEWin.cxx SciTEWin.h SciTE.h Accessor.h WindowAccessor.h KeyWords.h Pr
  SString.h Scintilla.h Extender.h FilePath.h SciTEBase.h JobQueue.h
 	$(CC) $(CXXFLAGS) -D STATIC_BUILD -c $< -o $@
 
-SciTERes.o:	SciTERes.rc SciTE.h PlatformRes.h
+SciTERes.o:	SciTERes.rc SciTE.h PlatformRes.h SciTE.exe.manifest
 	$(WINDRES) $(RCINCLUDEDIRS) SciTERes.rc $@ # modified by Mitchell
 
 # Also depends on ../src/Embedded.properties but may not want to build everywhere
 # so must explicitly ask to build it.
-Sc1Res.o:	SciTERes.rc SciTE.h PlatformRes.h
+Sc1Res.o:	SciTERes.rc SciTE.h PlatformRes.h SciTE.exe.manifest
 	$(WINDRES) $(RCINCLUDEDIRS) SciTERes.rc --define STATIC_BUILD $@ # modified by Mitchell
 
 # Make sure SciTEBase gets rebuilt (so its about box gets a new

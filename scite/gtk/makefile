@@ -65,7 +65,7 @@ endif
 
 #CXXFLAGS= -g -DGTK -DSCI_LEXER -DSYSCONF_PATH=\"$(SYSCONF_PATH)\" -Wwrite-strings
 INCLUDEDIRS=-I ../../scintilla/include -I ../src $(LUA_INCLUDE)
-CXXBASEFLAGS=-W -Wall -Wno-char-subscripts -pedantic -DGTK -DSCI_LEXER -DPIXMAP_PATH=\"$(pixmapdir)\" -DSYSCONF_PATH=\"$(SYSCONF_PATH)\" $(INCLUDEDIRS)
+CXXBASEFLAGS=-W -Wall -Wno-char-subscripts -pedantic -Os -DGTK -DSCI_LEXER -DPIXMAP_PATH=\"$(pixmapdir)\" -DSYSCONF_PATH=\"$(SYSCONF_PATH)\" $(INCLUDEDIRS)
 
 ifdef DEBUG
 CXXTFLAGS=-DDEBUG -g $(CXXBASEFLAGS)
@@ -96,8 +96,8 @@ deps:
 # make should be run in ../../scintilla/gtk to compile all the lexers.
 COMPLIB=../../scintilla/bin/scintilla.a
 
-$(PROG): SciTEGTK.o FilePath.o SciTEBase.o SciTEBuffers.o SciTEIO.o StringList.o Exporters.o \
-PropSetFile.o MultiplexExtension.o DirectorExtension.o SciTEProps.o Utf8_16.o \
+$(PROG): SciTEGTK.o GUIGTK.o FilePath.o SciTEBase.o SciTEBuffers.o SciTEIO.o StringList.o Exporters.o \
+PropSetFile.o MultiplexExtension.o DirectorExtension.o SciTEProps.o StyleWriter.o Utf8_16.o \
 	JobQueue.o GTKMutex.o IFaceTable.o $(COMPLIB) $(LUA_OBJS)
 	$(CC) `$(CONFIGTHREADS)` -rdynamic -Wl,--version-script lua.vers -DGTK $^ $(LUA_LIB) -o $@ $(CONFIGLIB)
 

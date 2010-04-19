@@ -9,16 +9,35 @@
     <meta name="keywords" content="Scintilla, SciTE, Editing Component, Text Editor" />
     <meta name="Description"
     content="www.scintilla.org is the home of the Scintilla editing component and SciTE text editor application." />
-    <meta name="Date.Modified" content="20100125" />
-    <script>
+    <meta name="Date.Modified" content="20100409" />
+    <script type="text/javascript">
    	function IsRemote() {
 		var loc = '' + window.location;
 		return loc.indexOf('http:') != -1;
    	}
    </script>
     <style type="text/css">
-        .versionlist {
-	color: #FFCC99;
+        #versionlist {
+            margin: 0;
+            padding: .5em;
+            list-style-type: none;
+            color: #FFCC99;
+            background: #000000;
+        }
+        #versionlist li {
+            margin-bottom: .5em;
+        }
+        #menu {
+            margin: 0;
+            padding: .5em 0;
+            list-style-type: none;
+            font-size: larger;
+            background: #CCCCCC;
+        }
+        #menu li {
+            margin: 0;
+            padding: 0 .5em;
+            display: inline;
         }
     </style>
     <title>
@@ -36,8 +55,8 @@
           X</font>
         </td>
         <td width="40%" align="right">
-          <span class="versionlist"> Release version 2.02<br />
-           Site last modified January 25 2010</span>
+          <font color="#FFCC99" size="3"> Release version 2.11<br />
+           Site last modified April 9 2010</font>
         </td>
         <td width="20%">
           &nbsp;
@@ -51,77 +70,32 @@
         </td>
       </tr>
     </table>
-    <table bgcolor="#000000" width="100%" cellspacing="0" cellpadding="6" border="0">
-      <tr>
-        <td width="100%">
-          <span class="versionlist">Version 2.02 fixes some problems with rectangular selection.</span>
-        </td>
-      </tr>
-      <tr>
-        <td width="100%">
-          <span class="versionlist">Version 2.01 fixes some problems with multiple selection.</span>
-        </td>
-      </tr>
-      <tr>
-        <td width="100%">
-          <span class="versionlist">Version 2.0 supports multiple selection and virtual space.</span>
-        </td>
-      </tr>
-      <tr>
-        <td width="100%">
-          <span class="versionlist">Version 1.79 allows wrapped lines to be indented to match the
-	  initial line.<br />The tab bar is improved: on GTK+ it can be scrolled when there are many tabs and on Windows
-	  tabs can be reordered by drag and drop.</span>
-        </td>
-      </tr>
-      <tr>
-        <td width="100%">
-          <span class="versionlist">Version 1.78 includes some more lexers and fixes some bugs.</span>
-        </td>
-      </tr>
-      <tr>
-        <td width="100%">
-          <span class="versionlist">Version 1.77 fixes lexer bugs and other minor issues.</span>
-        </td>
-      </tr>
-      <tr>
-        <td width="100%">
-          <span class="versionlist">Version 1.76 fixes some minor bugs.</span>
-        </td>
-      </tr>
-    </table>
-    <table bgcolor="#CCCCCC" width="100%" cellspacing="0" cellpadding="8" border="0">
-      <tr>
-        <td>
-          <font size="4"> <a href="http://www.scintilla.org/SciTEImage.html">Screenshot</a>&nbsp;&nbsp;
+    <ul id="versionlist">
+      <li>Version 2.11 is just to match a Scintilla compatibility fix release.</li>
+      <li>Version 2.10 can access files on Windows with names outsides the user's preferred character encoding.
+          Case insensitive search and the upper and lower case commands work on non-ASCII characters.
+          SciTE will no longer run on Windows 95, 98 or ME.</li>
+      <li>Version 2.03 fixed non-responsive UI while running tools on GTK+ and autocompletion
+          lists appearing as a single line.</li>
+      <li>Version 2.02 fixes some problems with rectangular selection.</li>
+      <li>Version 2.01 fixes some problems with multiple selection.</li>
+      <li>Version 2.0 supports multiple selection and virtual space.</li>
+    </ul>
+    <ul id="menu">
+      <li><a href="http://www.scintilla.org/SciTEImage.html">Screenshot</a></li>
+      <li id="remote1"><a href="http://www.scintilla.org/SciTEDownload.html">Download</a></li>
+      <li><a href="http://www.scintilla.org/SciTEDoc.html">Documentation</a></li>
+      <li id="remote2"><a href="http://www.scintilla.org/index.html">Scintilla</a></li>
+      <li><a href="http://groups.google.com/group/scite-interest/web/extras">Extras</a></li>
+      <li><a href="http://groups.google.com/group/scite-interest/web/translations">Translations</a></li>
+      <li><a href="http://www.scintilla.org/SciTEFAQ.html">Frequently Asked Questions</a></li>
+    </ul>
 <script type="text/javascript" language="JavaScript"><!--
-if (IsRemote()) {
-    document.write('<a href="http://www.scintilla.org/SciTEDownload.html">Download</a>&nbsp;&nbsp;');
+if (!IsRemote()) { //if NOT remote...
+    document.getElementById('remote1').style.display='none';
+    document.getElementById('remote2').style.display='none';
 }
 //--></script>
-<noscript>
-<a href="http://www.scintilla.org/SciTEDownload.html">Download</a>&nbsp;&nbsp;
-</noscript>
-	  <a href="http://www.scintilla.org/SciTEDoc.html">
-          Documentation</a>&nbsp;&nbsp;
-<script type="text/javascript" language="JavaScript"><!--
-if (IsRemote()) {
-    document.write('<a href="http://www.scintilla.org/index.html">Scintilla</a>&nbsp;&nbsp; ');
-}
-//--></script>
-<noscript>
-<a href="http://www.scintilla.org/index.html">Scintilla</a>&nbsp;&nbsp; 
-</noscript>
-	  <a href="http://groups.google.com/group/scite-interest/web/extras">
-          Extras</a>&nbsp;&nbsp;
-	  <a href="http://groups.google.com/group/scite-interest/web/translations">
-          Translations</a>&nbsp;&nbsp;
-	  <a href="http://www.scintilla.org/SciTEFAQ.html">
-          Frequently Asked Questions</a>&nbsp;&nbsp;
-	  </font>
-        </td>
-      </tr>
-    </table>
     <p>
        <a href="http://www.scintilla.org/SciTEDoc.html">SciTE</a> is a SCIntilla based Text Editor. Originally built to
       demonstrate <a href="http://www.scintilla.org">Scintilla</a>, it has grown to be a generally useful editor with facilities for
@@ -130,8 +104,8 @@ if (IsRemote()) {
     </p>
     <p>
        SciTE is currently available for Intel Win32 and Linux compatible operating
-      systems with GTK+. It has been run on Windows XP and on Fedora 8 and Ubuntu 7.10
-      with GTK+ 2.12. <a href="http://www.scintilla.org/SciTEImage.html">Here is a screenshot of
+      systems with GTK+. It has been run on Windows XP and on Fedora 12 and Ubuntu 9.10
+      with GTK+ 2.18. <a href="http://www.scintilla.org/SciTEImage.html">Here is a screenshot of
       SciTE.</a><br />
     </p>
     <p>
@@ -179,7 +153,7 @@ if (IsRemote()) {
 </script>
 <noscript>
 <a href="http://sourceforge.net/projects/scintilla">
-<img src="http://sflogo.sourceforge.net/sflogo.php?group_id=2439&amp;type=8" width="80" height="15" alt="Get Scintilla at SourceForge.net. Fast, secure and Free Open Source software downloads" /></a> 
+<img src="http://sflogo.sourceforge.net/sflogo.php?group_id=2439&amp;type=8" width="80" height="15" alt="Get Scintilla at SourceForge.net. Fast, secure and Free Open Source software downloads" /></a>
 </noscript>
   </body>
 </html>

@@ -14,12 +14,16 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#include "SciTE.h"
-#include "PropSet.h"
+#include <string>
 
 #include "Scintilla.h"
+
+#include "GUI.h"
+
 #include "SString.h"
 #include "FilePath.h"
+
+#include "SciTE.h"
 
 #include "Mutex.h"
 #include "JobQueue.h"

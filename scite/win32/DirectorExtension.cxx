@@ -23,7 +23,7 @@
 #endif
 #endif
 
-#define _WIN32_WINNT  0x0400
+#define _WIN32_WINNT  0x0500
 #ifdef _MSC_VER
 // windows.h, et al, use a lot of nameless struct/unions - can't fix it, so allow it
 #pragma warning(disable: 4201)
@@ -35,19 +35,16 @@
 #endif
 #include <commctrl.h>
 
-#include "Platform.h"
+#include "Scintilla.h"
 
-#include "PropSet.h"
+#include "GUI.h"
 #include "SString.h"
 #include "StringList.h"
-
-#include "Scintilla.h"
-#include "Accessor.h"
+#include "FilePath.h"
+#include "PropSetFile.h"
 #include "Extender.h"
 #include "DirectorExtension.h"
 #include "SciTE.h"
-#include "FilePath.h"
-#include "PropSetFile.h"
 #include "Mutex.h"
 #include "JobQueue.h"
 #include "SciTEBase.h"
@@ -114,7 +111,7 @@ static void CheckEnvironment(ExtensionAPI *host) {
 	}
 }
 
-static char DirectorExtension_ClassName[] = "DirectorExtension";
+static TCHAR DirectorExtension_ClassName[] = TEXT("DirectorExtension");
 
 static LRESULT HandleCopyData(LPARAM lParam) {
 	COPYDATASTRUCT *pcds = reinterpret_cast<COPYDATASTRUCT *>(lParam);
@@ -162,7 +159,7 @@ DirectorExtension &DirectorExtension::Instance() {
 
 bool DirectorExtension::Initialise(ExtensionAPI *host_) {
 	host = host_;
-	SDI = ::RegisterWindowMessage("SciTEDirectorInterface");
+	SDI = ::RegisterWindowMessage(TEXT("SciTEDirectorInterface"));
 	HINSTANCE hInstance = reinterpret_cast<HINSTANCE>(
 	                          host->GetInstance());
 	DirectorExtension_Register(hInstance);
@@ -250,7 +247,7 @@ bool DirectorExtension::OnSavePointLeft() {
 	return false;
 }
 
-bool DirectorExtension::OnStyle(unsigned int, int, int, Accessor *) {
+bool DirectorExtension::OnStyle(unsigned int, int, int, StyleWriter *) {
 	return false;
 }
 

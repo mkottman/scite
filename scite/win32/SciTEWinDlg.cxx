@@ -123,11 +123,9 @@ void SciTEWin::WarnUser(int warnID) {
 	PlayThisSound(sound, atoi(soundDuration), hMM);
 }
 
-bool SciTEWin::DialogHandled(WindowID id, MSG *pmsg) {
+bool SciTEWin::DialogHandled(GUI::WindowID id, MSG *pmsg) {
 	if (id) {
-		if (isWindowsNT ?
-			::IsDialogMessageW(reinterpret_cast<HWND>(id), pmsg) :
-			::IsDialogMessageA(reinterpret_cast<HWND>(id), pmsg))
+		if (	::IsDialogMessageW(reinterpret_cast<HWND>(id), pmsg))
 			return true;
 	}
 	return false;
@@ -148,7 +146,7 @@ bool SciTEWin::ModelessHandler(MSG *pmsg) {
 		               (pmsg->wParam != VK_TAB) &&
 		               (pmsg->wParam != VK_ESCAPE) &&
 		               (pmsg->wParam != VK_RETURN) &&
-		               (Platform::IsKeyDown(VK_CONTROL) || !Platform::IsKeyDown(VK_MENU));
+		               (IsKeyDown(VK_CONTROL) || !IsKeyDown(VK_MENU));
 		if (!menuKey && DialogHandled(wParameters.GetID(), pmsg))
 			return true;
 	}
@@ -164,54 +162,60 @@ bool SciTEWin::ModelessHandler(MSG *pmsg) {
 }
 
 //  DoDialog is a bit like something in PC Magazine May 28, 1991, page 357
-int SciTEWin::DoDialog(HINSTANCE hInst, const char *resName, HWND hWnd, DLGPROC lpProc) {
+int SciTEWin::DoDialog(HINSTANCE hInst, const TCHAR *resName, HWND hWnd, DLGPROC lpProc) {
 	int result = ::DialogBoxParam(hInst, resName, hWnd, lpProc, reinterpret_cast<LPARAM>(this));
 
 	if (result == -1) {
-		SString errorNum(::GetLastError());
-		SString msg = LocaliseMessage("Failed to create dialog box: ^0.", errorNum.c_str());
-		::MessageBox(hWnd, msg.c_str(), appName, MB_OK | MB_SETFOREGROUND);
+		GUI::gui_string errorNum = GUI::StringFromInteger(::GetLastError());
+		GUI::gui_string msg = LocaliseMessage("Failed to create dialog box: ^0.", errorNum.c_str());
+		::MessageBoxW(hWnd, msg.c_str(), appName, MB_OK | MB_SETFOREGROUND);
 	}
 
 	return result;
 }
 
-bool SciTEWin::OpenDialog(FilePath directory, const char *filter) {
-	enum {maxBufferSize=2048};
 
-	SString openFilter = filter;
-	if (openFilter.length()) {
-		openFilter.substitute('|', '\0');
+GUI::gui_string SciTEWin::DialogFilterFromProperty(const GUI::gui_char *filterProperty) {
+	GUI::gui_string filter = filterProperty;
+	if (filter.length()) {
+		std::replace(filter.begin(), filter.end(), '|', '\0');
 		size_t start = 0;
-		while (start < openFilter.length()) {
-			const char *filterName = openFilter.c_str() + start;
+		while (start < filter.length()) {
+			const GUI::gui_char *filterName = filter.c_str() + start;
 			if (*filterName == '#') {
-				size_t next = start + strlen(openFilter.c_str() + start) + 1;
-				next += strlen(openFilter.c_str() + next) + 1;
-				openFilter.remove(start, next - start);
+				size_t next = start + wcslen(filter.c_str() + start) + 1;
+				next += wcslen(filter.c_str() + next) + 1;
+				filter.erase(start, next - start);
 			} else {
-				SString localised = localiser.Text(filterName, false);
-				if (localised.length()) {
-					openFilter.remove(start, strlen(filterName));
-					openFilter.insert(start, localised.c_str());
+				GUI::gui_string localised = localiser.Text(GUI::UTF8FromString(filterName).c_str(), false);
+				if (localised.size()) {
+					filter.erase(start, wcslen(filterName));
+					filter.insert(start, localised.c_str());
 				}
-				start += strlen(openFilter.c_str() + start) + 1;
-				start += strlen(openFilter.c_str() + start) + 1;
+				start += wcslen(filter.c_str() + start) + 1;
+				start += wcslen(filter.c_str() + start) + 1;
 			}
 		}
 	}
+	return filter;
+}
+
+bool SciTEWin::OpenDialog(FilePath directory, const GUI::gui_char *filter) {
+	enum {maxBufferSize=2048};
+
+	GUI::gui_string openFilter = DialogFilterFromProperty(filter);
 
 	if (!openWhat[0]) {
-		strcpy(openWhat, localiser.Text("Custom Filter").c_str());
-		openWhat[strlen(openWhat) + 1] = '\0';
+		wcscpy(openWhat, localiser.Text("Custom Filter").c_str());
+		openWhat[wcslen(openWhat) + 1] = '\0';
 	}
 
 	bool succeeded = false;
-	char openName[maxBufferSize]; // maximum common dialog buffer size (says mfc..)
+	GUI::gui_char openName[maxBufferSize]; // maximum common dialog buffer size (says mfc..)
 	openName[0] = '\0';
 
-	OPENFILENAMEA ofn = {
-	       sizeof(OPENFILENAME), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	OPENFILENAMEW ofn = {
+	       sizeof(ofn), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	};
 	ofn.hwndOwner = MainHWND();
 	ofn.hInstance = hInstance;
@@ -219,12 +223,12 @@ bool SciTEWin::OpenDialog(FilePath directory, const char *filter) {
 	ofn.nMaxFile = maxBufferSize;
 	ofn.lpstrFilter = openFilter.c_str();
 	ofn.lpstrCustomFilter = openWhat;
-	ofn.nMaxCustFilter = sizeof(openWhat);
+	ofn.nMaxCustFilter = ELEMENTS(openWhat);
 	ofn.nFilterIndex = filterDefault;
-	SString translatedTitle = localiser.Text("Open File");
+	GUI::gui_string translatedTitle = localiser.Text("Open File");
 	ofn.lpstrTitle = translatedTitle.c_str();
 	if (props.GetInt("open.dialog.in.file.directory")) {
-		ofn.lpstrInitialDir = directory.AsFileSystem();
+		ofn.lpstrInitialDir = directory.AsInternal();
 	}
 	ofn.Flags = OFN_HIDEREADONLY;
 
@@ -234,49 +238,49 @@ bool SciTEWin::OpenDialog(FilePath directory, const char *filter) {
 		    OFN_PATHMUSTEXIST |
 		    OFN_ALLOWMULTISELECT;
 	}
-	if (::GetOpenFileName(&ofn)) {
+	if (::GetOpenFileNameW(&ofn)) {
 		succeeded = true;
 		filterDefault = ofn.nFilterIndex;
 		// if single selection then have path+file
-		if (strlen(openName) > static_cast<size_t>(ofn.nFileOffset)) {
+		if (wcslen(openName) > static_cast<size_t>(ofn.nFileOffset)) {
 			Open(openName);
 		} else {
 			FilePath directory(openName);
-			char *p = openName + strlen(openName) + 1;
+			GUI::gui_char *p = openName + wcslen(openName) + 1;
 			while (*p) {
 				// make path+file, add it to the list
 				Open(FilePath(directory, FilePath(p)));
 				// goto next char pos after \0
-				p += strlen(p) + 1;
+				p += wcslen(p) + 1;
 			}
 		}
 	}
 	return succeeded;
 }
 
-FilePath SciTEWin::ChooseSaveName(FilePath directory, const char *title, const char *filter, const char *ext) {
+FilePath SciTEWin::ChooseSaveName(FilePath directory, const char *title, const GUI::gui_char *filter, const char *ext) {
 	FilePath path;
 	if (0 == dialogsOnScreen) {
-		char saveName[MAX_PATH] = "";
+		GUI::gui_char saveName[MAX_PATH] = GUI_TEXT("");
 		FilePath savePath = SaveName(ext);
 		if (!savePath.IsUntitled()) {
-			strcpy(saveName, savePath.AsFileSystem());
+			wcscpy(saveName, savePath.AsInternal());
 		}
-		OPENFILENAME ofn = {
-		                       sizeof(OPENFILENAME), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+		OPENFILENAMEW ofn = {
+		                       sizeof(ofn), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 		                   };
 		ofn.hwndOwner = MainHWND();
 		ofn.hInstance = hInstance;
 		ofn.lpstrFile = saveName;
-		ofn.nMaxFile = sizeof(saveName);
-		SString translatedTitle = localiser.Text(title);
+		ofn.nMaxFile = ELEMENTS(saveName);
+		GUI::gui_string translatedTitle = localiser.Text(title);
 		ofn.lpstrTitle = translatedTitle.c_str();
 		ofn.Flags = OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
 		ofn.lpstrFilter = filter;
-		ofn.lpstrInitialDir = directory.AsFileSystem();
+		ofn.lpstrInitialDir = directory.AsInternal();
 
 		dialogsOnScreen++;
-		if (::GetSaveFileName(&ofn)) {
+		if (::GetSaveFileNameW(&ofn)) {
 			path = saveName;
 		}
 		dialogsOnScreen--;
@@ -285,9 +289,10 @@ FilePath SciTEWin::ChooseSaveName(FilePath directory, const char *title, const c
 }
 
 bool SciTEWin::SaveAsDialog() {
-	FilePath path = ChooseSaveName(filePath.Directory(), "Save File");
+	GUI::gui_string saveFilter = DialogFilterFromProperty(
+		GUI::StringFromUTF8(props.GetExpanded("save.filter").c_str()).c_str());
+	FilePath path = ChooseSaveName(filePath.Directory(), "Save File", saveFilter.c_str());
 	if (path.IsSet()) {
-		//Platform::DebugPrintf("Save: <%s>\n", openName);
 		SaveIfNotOpen(path, false);
 		return true;
 	}
@@ -303,7 +308,7 @@ void SciTEWin::SaveACopy() {
 
 void SciTEWin::SaveAsHTML() {
 	FilePath path = ChooseSaveName(filePath.Directory(), "Export File As HTML",
-	                              "Web (.html;.htm)\0*.html;*.htm\0", ".html");
+	                              GUI_TEXT("Web (.html;.htm)\0*.html;*.htm\0"), ".html");
 	if (path.IsSet()) {
 		SaveToHTML(path);
 	}
@@ -311,7 +316,7 @@ void SciTEWin::SaveAsHTML() {
 
 void SciTEWin::SaveAsRTF() {
 	FilePath path = ChooseSaveName(filePath.Directory(), "Export File As RTF",
-	                              "RTF (.rtf)\0*.rtf\0", ".rtf");
+	                              GUI_TEXT("RTF (.rtf)\0*.rtf\0"), ".rtf");
 	if (path.IsSet()) {
 		SaveToRTF(path);
 	}
@@ -319,7 +324,7 @@ void SciTEWin::SaveAsRTF() {
 
 void SciTEWin::SaveAsPDF() {
 	FilePath path = ChooseSaveName(filePath.Directory(), "Export File As PDF",
-	                              "PDF (.pdf)\0*.pdf\0", ".pdf");
+	                              GUI_TEXT("PDF (.pdf)\0*.pdf\0"), ".pdf");
 	if (path.IsSet()) {
 		SaveToPDF(path);
 	}
@@ -327,7 +332,7 @@ void SciTEWin::SaveAsPDF() {
 
 void SciTEWin::SaveAsTEX() {
 	FilePath path = ChooseSaveName(filePath.Directory(), "Export File As LaTeX",
-	                              "TeX (.tex)\0*.tex\0", ".tex");
+	                              GUI_TEXT("TeX (.tex)\0*.tex\0"), ".tex");
 	if (path.IsSet()) {
 		SaveToTEX(path);
 	}
@@ -335,47 +340,47 @@ void SciTEWin::SaveAsTEX() {
 
 void SciTEWin::SaveAsXML() {
 	FilePath path = ChooseSaveName(filePath.Directory(), "Export File As XML",
-	                              "XML (.xml)\0*.xml\0", ".xml");
+	                              GUI_TEXT("XML (.xml)\0*.xml\0"), ".xml");
 	if (path.IsSet()) {
 		SaveToXML(path);
 	}
 }
 
 void SciTEWin::LoadSessionDialog() {
-	char openName[MAX_PATH] = "\0";
-	OPENFILENAME ofn = {
-	                       sizeof(OPENFILENAME), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	GUI::gui_char openName[MAX_PATH] = GUI_TEXT("");
+	OPENFILENAMEW ofn = {
+	                       sizeof(ofn), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	                   };
 	ofn.hwndOwner = MainHWND();
 	ofn.hInstance = hInstance;
 	ofn.lpstrFile = openName;
-	ofn.nMaxFile = sizeof(openName);
-	ofn.lpstrFilter = "Session (.session)\0*.session\0";
-	SString translatedTitle = localiser.Text("Load Session");
+	ofn.nMaxFile = ELEMENTS(openName);
+	ofn.lpstrFilter = GUI_TEXT("Session (.session)\0*.session\0");
+	GUI::gui_string translatedTitle = localiser.Text("Load Session");
 	ofn.lpstrTitle = translatedTitle.c_str();
 	ofn.Flags = OFN_HIDEREADONLY;
-	if (::GetOpenFileName(&ofn)) {
+	if (::GetOpenFileNameW(&ofn)) {
 		LoadSessionFile(openName);
 		RestoreSession();
 	}
 }
 
 void SciTEWin::SaveSessionDialog() {
-	char saveName[MAX_PATH] = "\0";
-	strcpy(saveName, "SciTE.session");
-	OPENFILENAME ofn = {
-			       sizeof(OPENFILENAME), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	GUI::gui_char saveName[MAX_PATH] = GUI_TEXT("\0");
+	wcscpy(saveName, GUI_TEXT("SciTE.session"));
+	OPENFILENAMEW ofn = {
+			       sizeof(ofn), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 			   };
 	ofn.hwndOwner = MainHWND();
 	ofn.hInstance = hInstance;
-	ofn.lpstrDefExt = "session";
+	ofn.lpstrDefExt = GUI_TEXT("session");
 	ofn.lpstrFile = saveName;
-	ofn.nMaxFile = sizeof(saveName);
-	SString translatedTitle = localiser.Text("Save Current Session");
+	ofn.nMaxFile = ELEMENTS(saveName);
+	GUI::gui_string translatedTitle = localiser.Text("Save Current Session");
 	ofn.lpstrTitle = translatedTitle.c_str();
 	ofn.Flags = OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
-	ofn.lpstrFilter = "Session (.session)\0*.session\0";
-	if (::GetSaveFileName(&ofn)) {
+	ofn.lpstrFilter = GUI_TEXT("Session (.session)\0*.session\0");
+	if (::GetSaveFileNameW(&ofn)) {
 		SaveSessionFile(saveName);
 	}
 }
@@ -435,9 +440,9 @@ void SciTEWin::Print(
 
 	HDC hdc = pdlg.hDC;
 
-	PRectangle rectMargins, rectPhysMargins;
-	Point ptPage;
-	Point ptDpi;
+	GUI::Rectangle rectMargins, rectPhysMargins;
+	GUI::Point ptPage;
+	GUI::Point ptDpi;
 
 	// Get printer resolution
 	ptDpi.x = GetDeviceCaps(hdc, LOGPIXELSX);    // dpi in X direction
@@ -469,14 +474,14 @@ void SciTEWin::Print(
 	// Take in account the page setup given by the user (if one value is not null)
 	if (pagesetupMargin.left != 0 || pagesetupMargin.right != 0 ||
 	        pagesetupMargin.top != 0 || pagesetupMargin.bottom != 0) {
-		PRectangle rectSetup;
+		GUI::Rectangle rectSetup;
 
 		// Convert the hundredths of millimeters (HiMetric) or
 		// thousandths of inches (HiEnglish) margin values
 		// from the Page Setup dialog to device units.
 		// (There are 2540 hundredths of a mm in an inch.)
 
-		char localeInfo[3];
+		TCHAR localeInfo[3];
 		GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_IMEASURE, localeInfo, 3);
 
 		if (localeInfo[0] == '0') {	// Metric system. '1' is US System
@@ -492,10 +497,10 @@ void SciTEWin::Print(
 		}
 
 		// Dont reduce margins below the minimum printable area
-		rectMargins.left	= Platform::Maximum(rectPhysMargins.left, rectSetup.left);
-		rectMargins.top	= Platform::Maximum(rectPhysMargins.top, rectSetup.top);
-		rectMargins.right	= Platform::Maximum(rectPhysMargins.right, rectSetup.right);
-		rectMargins.bottom	= Platform::Maximum(rectPhysMargins.bottom, rectSetup.bottom);
+		rectMargins.left	= Maximum(rectPhysMargins.left, rectSetup.left);
+		rectMargins.top	= Maximum(rectPhysMargins.top, rectSetup.top);
+		rectMargins.right	= Maximum(rectPhysMargins.right, rectSetup.right);
+		rectMargins.bottom	= Maximum(rectPhysMargins.bottom, rectSetup.bottom);
 	} else {
 		rectMargins.left	= rectPhysMargins.left;
 		rectMargins.top	= rectPhysMargins.top;
@@ -525,7 +530,7 @@ void SciTEWin::Print(
 	int headerLineHeight = ::MulDiv(
 	                           (sdHeader.specified & StyleDefinition::sdSize) ? sdHeader.size : 9,
 	                           ptDpi.y, 72);
-	HFONT fontHeader = ::CreateFont(headerLineHeight,
+	HFONT fontHeader = ::CreateFontA(headerLineHeight,
 	                                0, 0, 0,
 	                                sdHeader.bold ? FW_BOLD : FW_NORMAL,
 	                                sdHeader.italics,
@@ -543,7 +548,7 @@ void SciTEWin::Print(
 	int footerLineHeight = ::MulDiv(
 	                           (sdFooter.specified & StyleDefinition::sdSize) ? sdFooter.size : 9,
 	                           ptDpi.y, 72);
-	HFONT fontFooter = ::CreateFont(footerLineHeight,
+	HFONT fontFooter = ::CreateFontA(footerLineHeight,
 	                                0, 0, 0,
 	                                sdFooter.bold ? FW_BOLD : FW_NORMAL,
 	                                sdFooter.italics,
@@ -564,12 +569,12 @@ void SciTEWin::Print(
 		::DeleteDC(hdc);
 		DeleteFontObject(fontHeader);
 		DeleteFontObject(fontFooter);
-		SString msg = LocaliseMessage("Can not start printer document.");
+		GUI::gui_string msg = LocaliseMessage("Can not start printer document.");
 		WindowMessageBox(wSciTE, msg, MB_OK);
 		return;
 	}
 
-	LONG lengthDoc = SendEditor(SCI_GETLENGTH);
+	LONG lengthDoc = wEditor.Call(SCI_GETLENGTH);
 	LONG lengthDocMax = lengthDoc;
 	LONG lengthPrinted = 0;
 
@@ -616,7 +621,7 @@ void SciTEWin::Print(
 
 	while (lengthPrinted < lengthDoc) {
 		printPage = (!(pdlg.Flags & PD_PAGENUMS) ||
-		             (pageNum >= pdlg.nFromPage) && (pageNum <= pdlg.nToPage));
+		             ((pageNum >= pdlg.nFromPage) && (pageNum <= pdlg.nToPage)));
 
 		char pageString[32];
 		sprintf(pageString, "%0d", pageNum);
@@ -626,7 +631,7 @@ void SciTEWin::Print(
 			::StartPage(hdc);
 
 			if (headerFormat.size()) {
-				SString sHeader = propsPrint.GetExpanded("print.header.format");
+				GUI::gui_string sHeader = GUI::StringFromUTF8(props.GetExpanded("print.header.format").c_str());
 				::SetTextColor(hdc, sdHeader.ForeAsLong());
 				::SetBkColor(hdc, sdHeader.BackAsLong());
 				::SelectObject(hdc, fontHeader);
@@ -634,7 +639,7 @@ void SciTEWin::Print(
 				RECT rcw = {frPrint.rc.left, frPrint.rc.top - headerLineHeight - headerLineHeight / 2,
 				            frPrint.rc.right, frPrint.rc.top - headerLineHeight / 2};
 				rcw.bottom = rcw.top + headerLineHeight;
-				::ExtTextOut(hdc, frPrint.rc.left + 5, frPrint.rc.top - headerLineHeight / 2,
+				::ExtTextOutW(hdc, frPrint.rc.left + 5, frPrint.rc.top - headerLineHeight / 2,
 				             ETO_OPAQUE, &rcw, sHeader.c_str(),
 				             static_cast<int>(sHeader.length()), NULL);
 				::SetTextAlign(hdc, ta);
@@ -650,20 +655,20 @@ void SciTEWin::Print(
 		frPrint.chrg.cpMin = lengthPrinted;
 		frPrint.chrg.cpMax = lengthDoc;
 
-		lengthPrinted = SendEditor(SCI_FORMATRANGE,
+		lengthPrinted = wEditor.Call(SCI_FORMATRANGE,
 		                           printPage,
 		                           reinterpret_cast<LPARAM>(&frPrint));
 
 		if (printPage) {
 			if (footerFormat.size()) {
-				SString sFooter = propsPrint.GetExpanded("print.footer.format");
+				GUI::gui_string sFooter = GUI::StringFromUTF8(props.GetExpanded("print.footer.format").c_str());
 				::SetTextColor(hdc, sdFooter.ForeAsLong());
 				::SetBkColor(hdc, sdFooter.BackAsLong());
 				::SelectObject(hdc, fontFooter);
 				UINT ta = ::SetTextAlign(hdc, TA_TOP);
 				RECT rcw = {frPrint.rc.left, frPrint.rc.bottom + footerLineHeight / 2,
 				            frPrint.rc.right, frPrint.rc.bottom + footerLineHeight + footerLineHeight / 2};
-				::ExtTextOut(hdc, frPrint.rc.left + 5, frPrint.rc.bottom + footerLineHeight / 2,
+				::ExtTextOutW(hdc, frPrint.rc.left + 5, frPrint.rc.bottom + footerLineHeight / 2,
 				             ETO_OPAQUE, &rcw, sFooter.c_str(),
 				             static_cast<int>(sFooter.length()), NULL);
 				::SetTextAlign(hdc, ta);
@@ -684,7 +689,7 @@ void SciTEWin::Print(
 			break;
 	}
 
-	SendEditor(SCI_FORMATRANGE, FALSE, 0);
+	wEditor.Call(SCI_FORMATRANGE, FALSE, 0);
 
 	::EndDoc(hdc);
 	::DeleteDC(hdc);
@@ -725,9 +730,6 @@ void SciTEWin::PrintSetup() {
 	hDevNames = pdlg.hDevNames;
 }
 
-// This is a reasonable buffer size for dialog box text conversions
-#define CTL_TEXT_BUF 512
-
 class Dialog {
 	HWND hDlg;
 public:
@@ -748,51 +750,35 @@ public:
 		int len = ::GetWindowTextLength(wT);
 		SBuffer itemText(len);
 		if (len > 0) {
-			::GetDlgItemText(hDlg, id, itemText.ptr(), len + 1);
+			::GetDlgItemTextA(hDlg, id, itemText.ptr(), len + 1);
 		}
 		return SString(itemText);
 	}
 
-	void SetItemText(int id, const char *s) {
-		::SetDlgItemText(hDlg, id, s);
+	GUI::gui_string ItemTextG(int id) {
+		HWND wT = Item(id);
+		int len = ::GetWindowTextLengthW(wT) + 1;
+		std::vector<GUI::gui_char> itemText(len);
+		if (::GetDlgItemTextW(hDlg, id, &itemText[0], len)) {
+			return GUI::gui_string(&itemText[0]);
+		} else {
+			return GUI::gui_string();
+		}
+	}
+
+	void SetItemText(int id, const GUI::gui_char *s) {
+		::SetDlgItemTextW(hDlg, id, s);
 	}
 
 	// Handle Unicode controls (assume strings to be UTF-8 on Windows NT)
 
 	SString ItemTextU(int id) {
-		SString result = "";
-		char	msz[CTL_TEXT_BUF];
-
-		if (::IsWindowUnicode(Item(id))) {
-			WCHAR wsz[CTL_TEXT_BUF];
-			if (::GetDlgItemTextW(hDlg, id, wsz, CTL_TEXT_BUF)) {
-				if (::WideCharToMultiByte(CP_UTF8, 0, wsz, -1, msz, CTL_TEXT_BUF, NULL, NULL))
-					result = msz;
-			}
-		} else {
-			if (::GetDlgItemTextA(hDlg, id, msz, CTL_TEXT_BUF))
-				result = msz;
-		}
-
-		return result;
+		SString s = GUI::UTF8FromString(ItemTextG(id).c_str()).c_str();
+		return s;
 	}
 
-	BOOL SetItemTextU(int id, LPCSTR pmsz) {
-		BOOL bSuccess = FALSE;
-		WCHAR wsz[CTL_TEXT_BUF];
-
-		if (!pmsz || *pmsz == 0)
-			return ::SetDlgItemTextA(hDlg, id, "");
-
-		if (::IsWindowUnicode(Item(id))) {
-			if (::MultiByteToWideChar(CP_UTF8, 0, pmsz, -1, wsz, CTL_TEXT_BUF)) {
-				bSuccess = ::SetDlgItemTextW(hDlg, id, wsz);
-			}
-		} else {
-			bSuccess = ::SetDlgItemTextA(hDlg, id, pmsz);
-		}
-
-		return bSuccess;
+	void SetItemTextU(int id, const SString &s) {
+		SetItemText(id, GUI::StringFromUTF8(s.c_str()).c_str());
 	}
 
 	void SetCheck(int id, bool value) {
@@ -807,21 +793,10 @@ public:
 	void FillComboFromMemory(int id, const ComboMemory &mem, bool useTop = false) {
 		HWND combo = Item(id);
 		::SendMessage(combo, CB_RESETCONTENT, 0, 0);
-		if (::IsWindowUnicode(combo)) {
-			for (int i = 0; i < mem.Length(); i++) {
-				//Platform::DebugPrintf("Combo[%0d] = %s\n", i, mem.At(i).c_str());
-				WCHAR wszBuf[CTL_TEXT_BUF];
-				::MultiByteToWideChar(CP_UTF8, 0, mem.At(i).c_str(), -1, wszBuf,
-						    CTL_TEXT_BUF);
-				::SendMessageW(combo, CB_ADDSTRING, 0,
-					       reinterpret_cast<LPARAM>(wszBuf));
-			}
-		} else {
-			for (int i = 0; i < mem.Length(); i++) {
-				//Platform::DebugPrintf("Combo[%0d] = %s\n", i, mem.At(i).c_str());
-				::SendMessage(combo, CB_ADDSTRING, 0,
-					      reinterpret_cast<LPARAM>(mem.At(i).c_str()));
-			}
+		for (int i = 0; i < mem.Length(); i++) {
+			GUI::gui_string gs = GUI::StringFromUTF8(mem.At(i).c_str());
+			::SendMessageW(combo, CB_ADDSTRING, 0,
+				       reinterpret_cast<LPARAM>(gs.c_str()));
 		}
 		if (useTop) {
 			::SendMessage(combo, CB_SETCURSEL, 0, 0);
@@ -852,8 +827,7 @@ BOOL SciTEWin::FindMessage(HWND hDlg, UINT message, WPARAM wParam) {
 	case WM_INITDIALOG:
 		LocaliseDialog(hDlg);
 		dlg.FillComboFromMemory(IDFINDWHAT, memFinds);
-		dlg.SetItemTextU(IDFINDWHAT, findWhat.c_str());
-		::SendDlgItemMessage(hDlg, IDFINDWHAT, CB_LIMITTEXT, CTL_TEXT_BUF - 1, 0);
+		dlg.SetItemTextU(IDFINDWHAT, findWhat);
 		dlg.SetCheck(IDWHOLEWORD, wholeWord);
 		dlg.SetCheck(IDMATCHCASE, matchCase);
 		dlg.SetCheck(IDREGEXP, regExp);
@@ -864,7 +838,7 @@ BOOL SciTEWin::FindMessage(HWND hDlg, UINT message, WPARAM wParam) {
 			dlg.SetCheck(IDFINDSTYLE, findInStyle);
 			dlg.Enable(IDFINDSTYLE, findInStyle);
 			::SendMessage(dlg.Item(IDFINDSTYLE), EM_LIMITTEXT, 3, 1);
-			::SetDlgItemInt(hDlg, IDFINDSTYLE, SendEditor(SCI_GETSTYLEAT, SendEditor(SCI_GETCURRENTPOS)), FALSE);
+			::SetDlgItemInt(hDlg, IDFINDSTYLE, wEditor.Call(SCI_GETSTYLEAT, wEditor.Call(SCI_GETCURRENTPOS)), FALSE);
 		}
 		return TRUE;
 
@@ -959,9 +933,8 @@ BOOL SciTEWin::HandleReplaceCommand(int cmd) {
 	} else if (cmd == IDREPLACEINBUF) {
 		replacements = ReplaceInBuffers();
 	}
-	char replDone[10];
-	sprintf(replDone, "%d", replacements);
-	dlg.SetItemText(IDREPLDONE, replDone);
+	GUI::gui_string replDone = GUI::StringFromInteger(replacements);
+	dlg.SetItemText(IDREPLDONE, replDone.c_str());
 
 	return TRUE;
 }
@@ -978,11 +951,9 @@ BOOL SciTEWin::ReplaceMessage(HWND hDlg, UINT message, WPARAM wParam) {
 	case WM_INITDIALOG:
 		LocaliseDialog(hDlg);
 		dlg.FillComboFromMemory(IDFINDWHAT, memFinds);
-		dlg.SetItemTextU(IDFINDWHAT, findWhat.c_str());
-		::SendDlgItemMessage(hDlg, IDFINDWHAT, CB_LIMITTEXT, CTL_TEXT_BUF - 1, 0);
+		dlg.SetItemTextU(IDFINDWHAT, findWhat);
 		dlg.FillComboFromMemory(IDREPLACEWITH, memReplaces);
-		dlg.SetItemTextU(IDREPLACEWITH, replaceWhat.c_str());
-		::SendDlgItemMessage(hDlg, IDREPLACEWITH, CB_LIMITTEXT, CTL_TEXT_BUF - 1, 0);
+		dlg.SetItemTextU(IDREPLACEWITH, replaceWhat);
 		dlg.SetCheck(IDWHOLEWORD, wholeWord);
 		dlg.SetCheck(IDMATCHCASE, matchCase);
 		dlg.SetCheck(IDREGEXP, regExp);
@@ -991,9 +962,9 @@ BOOL SciTEWin::ReplaceMessage(HWND hDlg, UINT message, WPARAM wParam) {
 		if (FindReplaceAdvanced()) {
 			dlg.SetCheck(IDFINDSTYLE, findInStyle);
 			dlg.Enable(IDFINDSTYLE, findInStyle);
-			::SetDlgItemInt(hDlg, IDFINDSTYLE, SendEditor(SCI_GETSTYLEAT, SendEditor(SCI_GETCURRENTPOS)), FALSE);
+			::SetDlgItemInt(hDlg, IDFINDSTYLE, wEditor.Call(SCI_GETSTYLEAT, wEditor.Call(SCI_GETCURRENTPOS)), FALSE);
 		}
-		dlg.SetItemText(IDREPLDONE, "0");
+		dlg.SetItemText(IDREPLDONE, GUI_TEXT("0"));
 		if (findWhat.length() != 0 && props.GetInt("find.replacewith.focus", 1)) {
 			::SetFocus(wReplaceWith);
 			return FALSE;
@@ -1047,12 +1018,12 @@ BOOL SciTEWin::IncrementFindMessage(HWND hDlg, UINT message, WPARAM wParam) {
 		wFindIncrement = hDlg;
 		LocaliseDialog(hDlg);
 		SetWindowLong(hDlg, GWL_STYLE, WS_TABSTOP || GetWindowLong(hDlg, GWL_STYLE));
-		dlg.SetItemTextU(IDC_INCFINDTEXT, ""); //findWhat.c_str()
+		dlg.SetItemTextU(IDC_INCFINDTEXT, "");
 		SetFocus(hDlg);
 
-		PRectangle aRect = wFindIncrement.GetPosition();
-		PRectangle aTBRect = wStatusBar.GetPosition();
-		PRectangle aNewRect = aTBRect;
+		GUI::Rectangle aRect = wFindIncrement.GetPosition();
+		GUI::Rectangle aTBRect = wStatusBar.GetPosition();
+		GUI::Rectangle aNewRect = aTBRect;
 		aNewRect.top = aNewRect.bottom - (aRect.bottom - aRect.top);
 		aNewRect.right = aNewRect.left + aRect.right - aRect.left;
 		wFindIncrement.SetPosition(aNewRect);
@@ -1093,7 +1064,7 @@ BOOL SciTEWin::IncrementFindMessage(HWND hDlg, UINT message, WPARAM wParam) {
 				// Could not find string with added character so revert to previous value.
 				findWhat = ffLastWhat;
 				entered = true;
-				dlg.SetItemTextU(IDC_INCFINDTEXT, findWhat.c_str());
+				dlg.SetItemTextU(IDC_INCFINDTEXT, findWhat);
 				SendMessage(dlg.Item(IDC_INCFINDTEXT), EM_SETSEL, ffLastWhat.length(), ffLastWhat.length());
 				entered = false;
 			}
@@ -1115,31 +1086,14 @@ void SciTEWin::FindIncrement() {
 		return;
 	}
 
-	memset(&fr, 0, sizeof(fr));
-	fr.lStructSize = sizeof(fr);
-	fr.hwndOwner = MainHWND();
-	fr.hInstance = hInstance;
-	fr.Flags = 0;
-	if (!reverseFind)
-		fr.Flags |= FR_DOWN;
 	findWhat.clear();
-	fr.lpstrFindWhat = const_cast<char *>(findWhat.c_str());
-	fr.wFindWhatLen = static_cast<WORD>(findWhat.length() + 1);
 
 	replacing = false;
-	if (isWindowsNT) {
-		::CreateDialogParamW(hInstance,
-		                                    (LPCWSTR)MAKEINTRESOURCE(IDD_FIND2),
-		                                    MainHWND(),
-		                                    reinterpret_cast<DLGPROC>(FindIncrementDlg),
-		                                    reinterpret_cast<LPARAM>(this));
-	} else {
-		::CreateDialogParamA(hInstance,
-		                                    MAKEINTRESOURCE(IDD_FIND2),
-		                                    MainHWND(),
-		                                    reinterpret_cast<DLGPROC>(FindIncrementDlg),
-		                                    reinterpret_cast<LPARAM>(this));
-	}
+	::CreateDialogParamW(hInstance,
+	                                    (LPCWSTR)MAKEINTRESOURCE(IDD_FIND2),
+	                                    MainHWND(),
+	                                    reinterpret_cast<DLGPROC>(FindIncrementDlg),
+	                                    reinterpret_cast<LPARAM>(this));
 	wFindIncrement.Show();
 }
 
@@ -1154,30 +1108,13 @@ void SciTEWin::Find() {
 		return;
 	SelectionIntoFind();
 
-	memset(&fr, 0, sizeof(fr));
-	fr.lStructSize = sizeof(fr);
-	fr.hwndOwner = MainHWND();
-	fr.hInstance = hInstance;
-	fr.Flags = 0;
-	if (!reverseFind)
-		fr.Flags |= FR_DOWN;
-	fr.lpstrFindWhat = const_cast<char *>(findWhat.c_str());
-	fr.wFindWhatLen = static_cast<WORD>(findWhat.length() + 1);
 	int dialog_id = FindReplaceAdvanced() ? IDD_FIND_ADV : IDD_FIND;
 
-	if (isWindowsNT) {
-		wFindReplace = ::CreateDialogParamW(hInstance,
-		                                    (LPCWSTR)MAKEINTRESOURCE(dialog_id),
-		                                    MainHWND(),
-		                                    reinterpret_cast<DLGPROC>(FindDlg),
-		                                    reinterpret_cast<LPARAM>(this));
-	} else {
-		wFindReplace = ::CreateDialogParamA(hInstance,
-		                                    MAKEINTRESOURCE(dialog_id),
-		                                    MainHWND(),
-		                                    reinterpret_cast<DLGPROC>(FindDlg),
-		                                    reinterpret_cast<LPARAM>(this));
-	}
+	wFindReplace = ::CreateDialogParamW(hInstance,
+	                                    (LPCWSTR)MAKEINTRESOURCE(dialog_id),
+	                                    MainHWND(),
+	                                    reinterpret_cast<DLGPROC>(FindDlg),
+	                                    reinterpret_cast<LPARAM>(this));
 	wFindReplace.Show();
 
 	replacing = false;
@@ -1244,8 +1181,8 @@ BOOL SciTEWin::GrepMessage(HWND hDlg, UINT message, WPARAM wParam) {
 	case WM_INITDIALOG:
 		LocaliseDialog(hDlg);
 		FillCombos(dlg);
-		dlg.SetItemText(IDFINDWHAT, props.Get("find.what").c_str());
-		dlg.SetItemText(IDDIRECTORY, props.Get("find.directory").c_str());
+		dlg.SetItemTextU(IDFINDWHAT, props.Get("find.what"));
+		dlg.SetItemTextU(IDDIRECTORY, props.Get("find.directory"));
 		if (props.GetNewExpand("find.command") == "") {
 			// Empty means use internal that can respond to flags
 			dlg.SetCheck(IDWHOLEWORD, wholeWord);
@@ -1267,15 +1204,15 @@ BOOL SciTEWin::GrepMessage(HWND hDlg, UINT message, WPARAM wParam) {
 			return FALSE;
 
 		} else if (ControlIDOfCommand(wParam) == IDOK) {
-			findWhat = dlg.ItemText(IDFINDWHAT);
+			findWhat = dlg.ItemTextU(IDFINDWHAT);
 			props.Set("find.what", findWhat.c_str());
 			memFinds.Insert(findWhat.c_str());
 
-			SString files = dlg.ItemText(IDFILES);
+			SString files = dlg.ItemTextU(IDFILES);
 			props.Set("find.files", files.c_str());
 			memFiles.Insert(files.c_str());
 
-			SString directory = dlg.ItemText(IDDIRECTORY);
+			SString directory = dlg.ItemTextU(IDDIRECTORY);
 			props.Set("find.directory", directory.c_str());
 			memDirectory.Insert(directory.c_str());
 
@@ -1293,7 +1230,7 @@ BOOL SciTEWin::GrepMessage(HWND hDlg, UINT message, WPARAM wParam) {
 				return FALSE;
 			}
 		} else if (ControlIDOfCommand(wParam) == IDDOTDOT) {
-			FilePath directory(dlg.ItemText(IDDIRECTORY).c_str());
+			FilePath directory(dlg.ItemTextG(IDDIRECTORY));
 			directory = directory.Directory();
 			dlg.SetItemText(IDDIRECTORY, directory.AsInternal());
 
@@ -1314,14 +1251,14 @@ BOOL SciTEWin::GrepMessage(HWND hDlg, UINT message, WPARAM wParam) {
 				memset(&info, 0, sizeof(info));
 				info.hwndOwner = hDlg;
 				info.pidlRoot = NULL;
-				char szDisplayName[MAX_PATH];
+				TCHAR szDisplayName[MAX_PATH];
 				info.pszDisplayName = szDisplayName;
-				SString title = localiser.Text("Select a folder to search from");
+				GUI::gui_string title = localiser.Text("Select a folder to search from");
 				info.lpszTitle = title.c_str();
 				info.ulFlags = 0;
 				info.lpfn = BrowseCallbackProc;
-				SString directory = dlg.ItemText(IDDIRECTORY);
-				if (!directory.endswith(pathSepString)) {
+				GUI::gui_string directory = dlg.ItemTextG(IDDIRECTORY);
+				if (!EndsWith(directory, pathSepString)) {
 					directory += pathSepString;
 				}
 				info.lParam = reinterpret_cast<LPARAM>(directory.c_str());
@@ -1334,7 +1271,7 @@ BOOL SciTEWin::GrepMessage(HWND hDlg, UINT message, WPARAM wParam) {
 				if (pidl) {
 					// Try to convert the pidl to a display string.
 					// Return is true if success.
-					char szDir[MAX_PATH];
+					TCHAR szDir[MAX_PATH];
 					if (::SHGetPathFromIDList(pidl, szDir)) {
 						// Set edit control to the directory path.
 						dlg.SetItemText(IDDIRECTORY, szDir);
@@ -1359,8 +1296,8 @@ void SciTEWin::FindInFiles() {
 	SelectionIntoFind();
 	props.Set("find.what", findWhat.c_str());
 	FilePath findInDir = filePath.Directory();
-	props.Set("find.directory", findInDir.AsFileSystem());
-	wFindInFiles = ::CreateDialogParam(hInstance, "Grep", MainHWND(),
+	props.Set("find.directory", findInDir.AsUTF8().c_str());
+	wFindInFiles = ::CreateDialogParam(hInstance, TEXT("Grep"), MainHWND(),
 		reinterpret_cast<DLGPROC>(GrepDlg), reinterpret_cast<sptr_t>(this));
 	wFindInFiles.Show();
 }
@@ -1370,30 +1307,13 @@ void SciTEWin::Replace() {
 		return;
 	SelectionIntoFind(false); // don't strip EOL at end of selection
 
-	memset(&fr, 0, sizeof(fr));
-	fr.lStructSize = sizeof(fr);
-	fr.hwndOwner = MainHWND();
-	fr.hInstance = hInstance;
-	fr.Flags = FR_REPLACE;
-	fr.lpstrFindWhat = const_cast<char *>(findWhat.c_str());
-	fr.lpstrReplaceWith = const_cast<char *>(replaceWhat.c_str());
-	fr.wFindWhatLen = static_cast<WORD>(findWhat.length() + 1);
-	fr.wReplaceWithLen = static_cast<WORD>(replaceWhat.length() + 1);
 	int dialog_id = (!props.GetInt("find.replace.advanced") ? IDD_REPLACE : IDD_REPLACE_ADV);
 
-	if (isWindowsNT) {
-		wFindReplace = ::CreateDialogParamW(hInstance,
-		                                    (LPCWSTR)MAKEINTRESOURCE(dialog_id),
-		                                    MainHWND(),
-		                                    reinterpret_cast<DLGPROC>(ReplaceDlg),
-		                                    reinterpret_cast<sptr_t>(this));
-	} else {
-		wFindReplace = ::CreateDialogParamA(hInstance,
-		                                    MAKEINTRESOURCE(dialog_id),
-		                                    MainHWND(),
-		                                    reinterpret_cast<DLGPROC>(ReplaceDlg),
-		                                    reinterpret_cast<sptr_t>(this));
-	}
+	wFindReplace = ::CreateDialogParamW(hInstance,
+	                                    (LPCWSTR)MAKEINTRESOURCE(dialog_id),
+	                                    MainHWND(),
+	                                    reinterpret_cast<DLGPROC>(ReplaceDlg),
+	                                    reinterpret_cast<sptr_t>(this));
 	wFindReplace.Show();
 
 	replacing = true;
@@ -1415,12 +1335,12 @@ BOOL SciTEWin::GoLineMessage(HWND hDlg, UINT message, WPARAM wParam) {
 	switch (message) {
 
 	case WM_INITDIALOG: {
-			int position = SendEditor(SCI_GETCURRENTPOS);
-			int lineNumber = SendEditor(SCI_LINEFROMPOSITION, position) + 1;
-			int lineStart = SendEditor(SCI_POSITIONFROMLINE, lineNumber - 1);
+			int position = wEditor.Call(SCI_GETCURRENTPOS);
+			int lineNumber = wEditor.Call(SCI_LINEFROMPOSITION, position) + 1;
+			int lineStart = wEditor.Call(SCI_POSITIONFROMLINE, lineNumber - 1);
 			int characterOnLine = 1;
 			while (position > lineStart) {
-				position = SendEditor(SCI_POSITIONBEFORE, position);
+				position = wEditor.Call(SCI_POSITIONBEFORE, position);
 				characterOnLine++;
 			}
 
@@ -1429,7 +1349,7 @@ BOOL SciTEWin::GoLineMessage(HWND hDlg, UINT message, WPARAM wParam) {
 			::SendDlgItemMessage(hDlg, IDGOLINECHAR, EM_LIMITTEXT, 10, 1);
 			::SetDlgItemInt(hDlg, IDCURRLINE, lineNumber, FALSE);
 			::SetDlgItemInt(hDlg, IDCURRLINECHAR, characterOnLine, FALSE);
-			::SetDlgItemInt(hDlg, IDLASTLINE, SendEditor(SCI_GETLINECOUNT), FALSE);
+			::SetDlgItemInt(hDlg, IDLASTLINE, wEditor.Call(SCI_GETLINECOUNT), FALSE);
                 }
 		return TRUE;
 
@@ -1451,20 +1371,20 @@ BOOL SciTEWin::GoLineMessage(HWND hDlg, UINT message, WPARAM wParam) {
 
 			if (bHasLine || bHasChar) {
 				if (!bHasLine)
-					lineNumber = SendEditor(SCI_LINEFROMPOSITION, SendEditor(SCI_GETCURRENTPOS)) + 1;
+					lineNumber = wEditor.Call(SCI_LINEFROMPOSITION, wEditor.Call(SCI_GETCURRENTPOS)) + 1;
 
 				GotoLineEnsureVisible(lineNumber - 1);
 
-				if (bHasChar && characterOnLine > 1 && lineNumber <= SendEditor(SCI_GETLINECOUNT)) {
+				if (bHasChar && characterOnLine > 1 && lineNumber <= wEditor.Call(SCI_GETLINECOUNT)) {
 					// Constrain to the requested line
-					int lineStart = SendEditor(SCI_POSITIONFROMLINE, lineNumber - 1);
-					int lineEnd = SendEditor(SCI_GETLINEENDPOSITION, lineNumber - 1);
+					int lineStart = wEditor.Call(SCI_POSITIONFROMLINE, lineNumber - 1);
+					int lineEnd = wEditor.Call(SCI_GETLINEENDPOSITION, lineNumber - 1);
 
 					int position = lineStart;
 					while (--characterOnLine && position < lineEnd)
-						position = SendEditor(SCI_POSITIONAFTER, position);
+						position = wEditor.Call(SCI_POSITIONAFTER, position);
 
-					SendEditor(SCI_GOTOPOS, position);
+					wEditor.Call(SCI_GOTOPOS, position);
 				}
 			}
 			::EndDialog(hDlg, IDOK);
@@ -1480,11 +1400,12 @@ BOOL CALLBACK SciTEWin::GoLineDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 }
 
 void SciTEWin::GoLineDialog() {
-	DoDialog(hInstance, "GoLine", MainHWND(), reinterpret_cast<DLGPROC>(GoLineDlg));
+	DoDialog(hInstance, TEXT("GoLine"), MainHWND(), reinterpret_cast<DLGPROC>(GoLineDlg));
 	WindowSetFocus(wEditor);
 }
 
 BOOL SciTEWin::AbbrevMessage(HWND hDlg, UINT message, WPARAM wParam) {
+	Dialog dlg(hDlg);
 	HWND hAbbrev = ::GetDlgItem(hDlg, IDABBREV);
 	switch (message) {
 
@@ -1502,7 +1423,9 @@ BOOL SciTEWin::AbbrevMessage(HWND hDlg, UINT message, WPARAM wParam) {
 			::EndDialog(hDlg, IDCANCEL);
 			return FALSE;
 		} else if (ControlIDOfCommand(wParam) == IDOK) {
-			::GetDlgItemText(hDlg, IDABBREV, abbrevInsert, sizeof(abbrevInsert));
+			SString sAbbrev = dlg.ItemText(IDABBREV);
+			strncpy(abbrevInsert, sAbbrev.c_str(), sizeof(abbrevInsert));
+			abbrevInsert[sizeof(abbrevInsert) - 1] = '\0';
 			::EndDialog(hDlg, IDOK);
 			return TRUE;
 		}
@@ -1516,7 +1439,8 @@ BOOL CALLBACK SciTEWin::AbbrevDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 }
 
 bool SciTEWin::AbbrevDialog() {
-	bool success = (DoDialog(hInstance, "InsAbbrev", MainHWND(), reinterpret_cast<DLGPROC>(AbbrevDlg)) == IDOK);
+	bool success = (DoDialog(hInstance, TEXT("InsAbbrev"), MainHWND(),
+		reinterpret_cast<DLGPROC>(AbbrevDlg)) == IDOK);
 	WindowSetFocus(wEditor);
 	return success;
 }
@@ -1527,21 +1451,21 @@ BOOL SciTEWin::TabSizeMessage(HWND hDlg, UINT message, WPARAM wParam) {
 	case WM_INITDIALOG: {
 			LocaliseDialog(hDlg);
 			::SendDlgItemMessage(hDlg, IDTABSIZE, EM_LIMITTEXT, 2, 1);
-			int tabSize = SendEditor(SCI_GETTABWIDTH);
+			int tabSize = wEditor.Call(SCI_GETTABWIDTH);
 			if (tabSize > 99)
 				tabSize = 99;
 			char tmp[3];
 			sprintf(tmp, "%d", tabSize);
-			::SetDlgItemText(hDlg, IDTABSIZE, tmp);
+			::SetDlgItemTextA(hDlg, IDTABSIZE, tmp);
 
 			::SendDlgItemMessage(hDlg, IDINDENTSIZE, EM_LIMITTEXT, 2, 1);
-			int indentSize = SendEditor(SCI_GETINDENT);
+			int indentSize = wEditor.Call(SCI_GETINDENT);
 			if (indentSize > 99)
 				indentSize = 99;
 			sprintf(tmp, "%d", indentSize);
-			::SetDlgItemText(hDlg, IDINDENTSIZE, tmp);
+			::SetDlgItemTextA(hDlg, IDINDENTSIZE, tmp);
 
-			::CheckDlgButton(hDlg, IDUSETABS, SendEditor(SCI_GETUSETABS));
+			::CheckDlgButton(hDlg, IDUSETABS, wEditor.Call(SCI_GETUSETABS));
 			return TRUE;
 		}
 
@@ -1558,12 +1482,12 @@ BOOL SciTEWin::TabSizeMessage(HWND hDlg, UINT message, WPARAM wParam) {
 			BOOL bOK;
 			int tabSize = static_cast<int>(::GetDlgItemInt(hDlg, IDTABSIZE, &bOK, FALSE));
 			if (tabSize > 0)
-				SendEditor(SCI_SETTABWIDTH, tabSize);
+				wEditor.Call(SCI_SETTABWIDTH, tabSize);
 			int indentSize = static_cast<int>(::GetDlgItemInt(hDlg, IDINDENTSIZE, &bOK, FALSE));
 			if (indentSize > 0)
-				SendEditor(SCI_SETINDENT, indentSize);
+				wEditor.Call(SCI_SETINDENT, indentSize);
 			bool useTabs = static_cast<bool>(::IsDlgButtonChecked(hDlg, IDUSETABS));
-			SendEditor(SCI_SETUSETABS, useTabs);
+			wEditor.Call(SCI_SETUSETABS, useTabs);
 			if (ControlIDOfCommand(wParam) == IDCONVERT) {
 				ConvertIndentation(tabSize, useTabs);
 			}
@@ -1580,7 +1504,7 @@ BOOL CALLBACK SciTEWin::TabSizeDlg(HWND hDlg, UINT message, WPARAM wParam, LPARA
 }
 
 void SciTEWin::TabSizeDialog() {
-	DoDialog(hInstance, "TabSize", MainHWND(), reinterpret_cast<DLGPROC>(TabSizeDlg));
+	DoDialog(hInstance, TEXT("TabSize"), MainHWND(), reinterpret_cast<DLGPROC>(TabSizeDlg));
 	WindowSetFocus(wEditor);
 }
 
@@ -1591,11 +1515,11 @@ bool SciTEWin::ParametersOpen() {
 void SciTEWin::ParamGrab() {
 	if (wParameters.Created()) {
 		HWND hDlg = reinterpret_cast<HWND>(wParameters.GetID());
+		Dialog dlg(hDlg);
 		for (int param = 0; param < maxParam; param++) {
-			char paramVal[200];
-			::GetDlgItemText(hDlg, IDPARAMSTART + param, paramVal, sizeof(paramVal));
+			std::string paramVal = GUI::UTF8FromString(dlg.ItemTextG(IDPARAMSTART + param));
 			SString paramText(param + 1);
-			props.Set(paramText.c_str(), paramVal);
+			props.Set(paramText.c_str(), paramVal.c_str());
 		}
 		UpdateStatusBar(true);
 	}
@@ -1609,12 +1533,14 @@ BOOL SciTEWin::ParametersMessage(HWND hDlg, UINT message, WPARAM wParam) {
 			wParameters = hDlg;
 			Dialog dlg(hDlg);
 			if (modalParameters) {
-				dlg.SetItemText(IDCMD, parameterisedCommand.c_str());
+				GUI::gui_string sCommand = GUI::StringFromUTF8(parameterisedCommand.c_str());
+				dlg.SetItemText(IDCMD, sCommand.c_str());
 			}
 			for (int param = 0; param < maxParam; param++) {
 				SString paramText(param + 1);
 				SString paramTextVal = props.Get(paramText.c_str());
-				dlg.SetItemText(IDPARAMSTART + param, paramTextVal.c_str());
+				GUI::gui_string sVal = GUI::StringFromUTF8(paramTextVal.c_str());
+				dlg.SetItemText(IDPARAMSTART + param, sVal.c_str());
 			}
 		}
 		return TRUE;
@@ -1659,14 +1585,14 @@ bool SciTEWin::ParametersDialog(bool modal) {
 	modalParameters = modal;
 	if (modal) {
 		success = DoDialog(hInstance,
-		                   "PARAMETERS",
+		                   TEXT("PARAMETERS"),
 		                   MainHWND(),
 		                   reinterpret_cast<DLGPROC>(ParametersDlg)) == IDOK;
 		wParameters = 0;
 		WindowSetFocus(wEditor);
 	} else {
 		::CreateDialogParam(hInstance,
-		                    "PARAMETERSNONMODAL",
+		                    TEXT("PARAMETERSNONMODAL"),
 		                    MainHWND(),
 		                    reinterpret_cast<DLGPROC>(ParametersDlg),
 		                    reinterpret_cast<LPARAM>(this));
@@ -1676,61 +1602,33 @@ bool SciTEWin::ParametersDialog(bool modal) {
 	return success;
 }
 
-int SciTEWin::WindowMessageBox(Window &w, const SString &msg, int style) {
+int SciTEWin::WindowMessageBox(GUI::Window &w, const GUI::gui_string &msg, int style) {
 	dialogsOnScreen++;
-	int ret = ::MessageBox(reinterpret_cast<HWND>(w.GetID()), msg.c_str(), appName, style | MB_SETFOREGROUND);
+	int ret = ::MessageBoxW(reinterpret_cast<HWND>(w.GetID()), msg.c_str(), appName, style | MB_SETFOREGROUND);
 	dialogsOnScreen--;
 	return ret;
 }
 
 void SciTEWin::FindMessageBox(const SString &msg, const SString *findItem) {
-
 	if (findItem == 0) {
-		SString msgBuf = LocaliseMessage(msg.c_str());
+		GUI::gui_string msgBuf = LocaliseMessage(msg.c_str());
 		WindowMessageBox(wFindReplace.Created() ? wFindReplace : wSciTE, msgBuf, MB_OK | MB_ICONWARNING);
 	} else {
-		if (isWindowsNT) {
-
-			SString sFormat = localiser.Text(msg.c_str());
-			SString sPart1 = sFormat.substr(0, sFormat.search("^0", 0));
-			SString sPart2 = sFormat.substr(sFormat.search("^0", 0));
-			sPart2 = sPart2.substr(2); // skip initial ^0
-
-			WCHAR wszPart1[256];
-			::MultiByteToWideChar(CP_ACP, 0, sPart1.c_str(), -1, wszPart1, 256);
-
-			WCHAR wszPart2[256];
-			::MultiByteToWideChar(CP_ACP, 0, sPart2.c_str(), -1, wszPart2, 256);
-
-			WCHAR wszFindItem[CTL_TEXT_BUF];
-			if (!::MultiByteToWideChar(CP_UTF8, 0, findItem->c_str(), -1, wszFindItem, CTL_TEXT_BUF)) {
-				wszFindItem[0] = 0;
-			}
-
-			WCHAR wszAppName[64];
-			::MultiByteToWideChar(CP_ACP, 0, appName, -1, wszAppName, 64);
-
-			WCHAR wszOutput[1024];
-			::lstrcpyW(wszOutput, wszPart1);
-			::lstrcatW(wszOutput, wszFindItem);
-			::lstrcatW(wszOutput, wszPart2);
-			::MessageBoxW(
-			    wFindReplace.Created() ? (HWND)wFindReplace.GetID() : (HWND)wSciTE.GetID(),
-			    wszOutput, wszAppName, MB_OK | MB_ICONWARNING);
-		} else {
-			SString msgBuf = LocaliseMessage(msg.c_str(), findItem->c_str());
-			WindowMessageBox(wFindReplace.Created() ? wFindReplace : wSciTE, msgBuf, MB_OK | MB_ICONWARNING);
-		}
+		GUI::gui_string findThing = GUI::StringFromUTF8(findItem->c_str());
+		GUI::gui_string msgBuf = LocaliseMessage(msg.c_str(), findThing.c_str());
+		WindowMessageBox(wFindReplace.Created() ? wFindReplace : wSciTE, msgBuf, MB_OK | MB_ICONWARNING);
 	}
 }
 
 BOOL SciTEWin::AboutMessage(HWND hDlg, UINT message, WPARAM wParam) {
 	switch (message) {
 
-	case WM_INITDIALOG:
+	case WM_INITDIALOG: {
 		LocaliseDialog(hDlg);
-		SetAboutMessage(::GetDlgItem(hDlg, IDABOUTSCINTILLA),
-		                staticBuild ? "Sc1  " : "SciTE");
+		GUI::ScintillaWindow ss;
+		ss.SetID(::GetDlgItem(hDlg, IDABOUTSCINTILLA));
+		SetAboutMessage(ss, staticBuild ? "Sc1  " : "SciTE");
+		}
 		return TRUE;
 
 	case WM_CLOSE:
@@ -1756,7 +1654,7 @@ BOOL CALLBACK SciTEWin::AboutDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 
 void SciTEWin::AboutDialogWithBuild(int staticBuild_) {
 	staticBuild = staticBuild_;
-	DoDialog(hInstance, "About", MainHWND(),
+	DoDialog(hInstance, TEXT("About"), MainHWND(),
 	         reinterpret_cast<DLGPROC>(AboutDlg));
 	WindowSetFocus(wEditor);
 }

@@ -18,7 +18,9 @@
 #endif
 
 #include <string>
+#include <vector>
 #include <map>
+#include <algorithm>
 
 #ifdef __MINGW_H
 #define _WIN32_IE	0x0400
@@ -31,7 +33,7 @@
 #endif
 #endif
 
-#define _WIN32_WINNT  0x0400
+#define _WIN32_WINNT  0x0500
 #ifdef _MSC_VER
 // windows.h, et al, use a lot of nameless struct/unions - can't fix it, so allow it
 #pragma warning(disable: 4201)
@@ -43,8 +45,6 @@
 #endif
 #include <commctrl.h>
 #include <richedit.h>
-
-#include "Platform.h"
 
 #include <io.h>
 #include <process.h>
@@ -60,15 +60,17 @@
 #include <dir.h>
 #endif
 
-#include "SciTE.h"
-#include "PropSet.h"
-#include "Accessor.h"
 #include "Scintilla.h"
-#include "Extender.h"
+
+#include "GUI.h"
+
 #include "SString.h"
+#include "StringList.h"
 #include "FilePath.h"
 #include "PropSetFile.h"
-#include "StringList.h"
+#include "StyleWriter.h"
+#include "Extender.h"
+#include "SciTE.h"
 #include "Mutex.h"
 #include "JobQueue.h"
 #include "SciTEBase.h"
@@ -87,18 +89,16 @@ protected:
 
 	int cmdShow;
 	static HINSTANCE hInstance;
-	static char *className;
-	static char *classNameInternal;
+	static const TCHAR *className;
+	static const TCHAR *classNameInternal;
 	static SciTEWin *app;
 	WINDOWPLACEMENT winPlace;
 	RECT rcWorkArea;
-	FINDREPLACE fr;
-	char openWhat[200];
+	GUI::gui_char openWhat[200];
 	bool modalParameters;
 	int filterDefault;
 	bool staticBuild;
 	int menuSource;
-	bool isWindowsNT;
 
 	// Fields also used in tool execution thread
 	HANDLE hWriteSubProcess;
@@ -108,7 +108,7 @@ protected:
 
 	HACCEL hAccTable;
 
-	PRectangle pagesetupMargin;
+	GUI::Rectangle pagesetupMargin;
 	HGLOBAL hDevMode;
 	HGLOBAL hDevNames;
 
@@ -126,10 +126,11 @@ protected:
 	/// Preserve focus during deactivation
 	HWND wFocus;
 
-	Window wFindInFiles;
-	Window wFindReplace;
-	Window wParameters;
+	GUI::Window wFindInFiles;
+	GUI::Window wFindReplace;
+	GUI::Window wParameters;
 
+	virtual void ReadLocalization();
 	virtual void GetWindowPosition(int *left, int *top, int *width, int *height, int *maximize);
 
 	virtual void ReadProperties();
@@ -138,7 +139,7 @@ protected:
 	virtual void SizeSubWindows();
 
 	virtual void SetMenuItem(int menuNumber, int position, int itemID,
-	                         const char *text, const char *mnemonic = 0);
+	                         const GUI::gui_char *text, const GUI::gui_char *mnemonic = 0);
 	virtual void RedrawMenu();
 	virtual void DestroyMenuItem(int menuNumber, int itemID);
 	virtual void CheckAMenuItem(int wIDCheckItem, bool val);
@@ -146,15 +147,16 @@ protected:
 	virtual void CheckMenus();
 
 	void LocaliseAccelerators();
-	SString LocaliseAccelerator(const char *Accelerator, int cmd);
+	GUI::gui_string LocaliseAccelerator(const GUI::gui_char *Accelerator, int cmd);
 	void LocaliseMenu(HMENU hmenu);
 	void LocaliseMenus();
 	void LocaliseControl(HWND w);
 	void LocaliseDialog(HWND wDialog);
 
-	int DoDialog(HINSTANCE hInst, const char *resName, HWND hWnd, DLGPROC lpProc);
-	virtual bool OpenDialog(FilePath directory, const char *filter);
-	FilePath ChooseSaveName(FilePath directory, const char *title, const char *filter=0, const char *ext=0);
+	int DoDialog(HINSTANCE hInst, const TCHAR *resName, HWND hWnd, DLGPROC lpProc);
+	GUI::gui_string DialogFilterFromProperty(const GUI::gui_char *filterProperty);
+	virtual bool OpenDialog(FilePath directory, const GUI::gui_char *filter);
+	FilePath ChooseSaveName(FilePath directory, const char *title, const GUI::gui_char *filter=0, const char *ext=0);
 	virtual bool SaveAsDialog();
 	virtual void SaveACopy();
 	virtual void SaveAsHTML();
@@ -164,7 +166,7 @@ protected:
 	virtual void SaveAsXML();
 	virtual void LoadSessionDialog();
 	virtual void SaveSessionDialog();
-	virtual bool PreOpenCheck(const char *file);
+	virtual bool PreOpenCheck(const GUI::gui_char *file);
 	virtual bool IsStdinBlocked();
 
 	/// Print the current buffer.
@@ -174,13 +176,13 @@ protected:
 
 	BOOL HandleReplaceCommand(int cmd);
 
-	virtual int WindowMessageBox(Window &w, const SString &msg, int style);
+	virtual int WindowMessageBox(GUI::Window &w, const GUI::gui_string &msg, int style);
 	virtual void FindMessageBox(const SString &msg, const SString *findItem=0);
 	virtual void AboutDialog();
 	void DropFiles(HDROP hdrop);
 	void MinimizeToTray();
 	void RestoreFromTray();
-	SString ProcessArgs(const char *cmdLine);
+	GUI::gui_string ProcessArgs(const GUI::gui_char *cmdLine);
 	virtual void QuitProgram();
 
 	virtual FilePath GetDefaultDirectory();
@@ -190,7 +192,7 @@ protected:
 	virtual void SetFileProperties(PropSetFile &ps);
 	virtual void SetStatusBarText(const char *s);
 
-	virtual void TabInsert(int index, char *title);
+	virtual void TabInsert(int index, const GUI::gui_char *title);
 	virtual void TabSelect(int index);
 	virtual void RemoveAllTabs();
 
@@ -258,13 +260,14 @@ public:
 	SciTEWin(Extension *ext = 0);
 	~SciTEWin();
 
-	bool DialogHandled(WindowID id, MSG *pmsg);
+	bool DialogHandled(GUI::WindowID id, MSG *pmsg);
 	bool ModelessHandler(MSG *pmsg);
 
 	void CreateUI();
 	/// Management of the command line parameters.
-	void Run(const char *cmdLine);
+	void Run(const GUI::gui_char *cmdLine);
     int EventLoop();
+	void OutputAppendEncodedStringSynchronised(GUI::gui_string s, int codePage);
 	DWORD ExecuteOne(const Job &jobToRun, bool &seenOutput);
 	void ProcessExecute();
 	void ShellExec(const SString &cmd, const char *dir);
@@ -272,7 +275,7 @@ public:
 	virtual void StopExecute();
 	virtual void AddCommand(const SString &cmd, const SString &dir, JobSubsystem jobType, const SString &input = "", int flags=0);
 
-	void Paint(Surface *surfaceWindow, PRectangle rcPaint);
+	void Paint(HDC hDC, GUI::Rectangle rcPaint);
 	void Creation();
 	LRESULT KeyDown(WPARAM wParam);
 	LRESULT KeyUp(WPARAM wParam);
@@ -282,7 +285,7 @@ public:
 	LRESULT WndProcI(UINT iMessage, WPARAM wParam, LPARAM lParam);
 
 	virtual SString EncodeString(const SString &s);
-	virtual SString GetRangeInUIEncoding(Window &wCurrent, int selStart, int selEnd);
+	virtual SString GetRangeInUIEncoding(GUI::ScintillaWindow &wCurrent, int selStart, int selEnd);
 
 	HACCEL GetAcceleratorTable() {
 		return hAccTable;
@@ -297,3 +300,12 @@ public:
 
 	friend class UniqueInstance;
 };
+
+inline bool IsKeyDown(int key) {
+	return (::GetKeyState(key) & 0x80000000) != 0;
+}
+
+
+inline GUI::Point PointFromLong(long lPoint) {
+	return GUI::Point(static_cast<short>(LOWORD(lPoint)), static_cast<short>(HIWORD(lPoint)));
+}

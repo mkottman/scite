@@ -14,6 +14,10 @@
 // an #ifdef in LuaExtension.  But I did it this way so that other
 // extensions can leverage it without needing to do anything special.
 
+#include <string>
+
+#include "Scintilla.h"
+#include "GUI.h"
 #include "SingleThreadExtension.h"
 
 // Is it true that only OnExecute needs to be protected / serialized?
@@ -43,7 +47,7 @@ LRESULT PASCAL SingleThreadExtension::WndProc(HWND hwnd, UINT uMsg, WPARAM wPara
 
 bool SingleThreadExtension::Initialise(ExtensionAPI *host_) {
 	hwndDispatcher = CreateWindow(
-		"STATIC", "SciTE_SingleThreadExtension_Dispatcher",
+		TEXT("STATIC"), TEXT("SciTE_SingleThreadExtension_Dispatcher"),
 		0, 0, 0, 0, 0, 0, 0, GetModuleHandle(NULL), 0
 	);
 
@@ -116,7 +120,7 @@ bool SingleThreadExtension::OnSavePointLeft() {
 	return ext->OnSavePointLeft();
 }
 
-bool SingleThreadExtension::OnStyle(unsigned int p, int q, int r, Accessor *s) {
+bool SingleThreadExtension::OnStyle(unsigned int p, int q, int r, StyleWriter *s) {
 	return ext->OnStyle(p,q,r,s);
 }
 
