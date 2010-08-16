@@ -13,6 +13,10 @@
 --~ package.path = package.path..';C:\\lang\\lua\\lua\\?.lua'
 --~ package.cpath = package.cpath..';c:\\lang\\lua\\?.dll'
 
+package.cpath = package.cpath..';c:\\lua\\clibs\\?.dll'
+
+
+
 -- useful function for getting a property, or a default if not present.
 function scite_GetProp(key,default)
    local val = props[key]
@@ -21,10 +25,10 @@ function scite_GetProp(key,default)
 end
 
 function scite_GetPropBool(key,default)
-	local res = scite_GetProp(key,default)
-	if not res or res == '0' or res == 'false' then return false
-	else return true
-	end
+    local res = scite_GetProp(key,default)
+    if not res or res == '0' or res == 'false' then return false
+    else return true
+    end
 end
 
 local GTK = scite_GetProp('PLAT_GTK')
@@ -91,6 +95,8 @@ local function Dispatch4(handlers,arg1,arg2,arg3,arg4)
     end
     return false
 end
+
+DoDispatchOne = DispatchOne -- export this!
 
 -- these are the standard SciTE Lua callbacks  - we use them to call installed extman handlers!
 function OnMarginClick()
@@ -178,6 +184,7 @@ local function append_unique(tbl,fn,rem)
     end
   end
 end
+ex_append_unique = append_unique
 
 -- this is how you register your own handlers with extman
 function scite_OnMarginClick(fn,rem)
@@ -358,9 +365,9 @@ end
 local function set_line_handler(fn,rem,handler,on_char)
   append_unique(handler,fn,rem)
   if not rem then
-     scite_OnChar(on_char)
+    scite_OnChar(on_char)
   else
-     scite_OnChar(on_char,'remove')
+    scite_OnChar(on_char,'remove')
   end
 end
 
@@ -368,10 +375,21 @@ function scite_OnEditorLine(fn,rem)
   set_line_handler(fn,rem,_LineEd,on_line_editor_char)
 end
 
-function scite_OnOutputLine(fn,rem)
-  set_line_handler(fn,rem,_LineOut,on_line_output_char)
-end
+-- with this scheme, there is a primary handler, and secondary prompt handlers
+-- can temporarily take charge of input. There is only one prompt in charge
+-- at any particular time, however.
+local primary_handler
 
+function scite_OnOutputLine(fn,rem)
+    if not rem then
+        if not primary_handler then primary_handler = fn end
+    end
+    _LineOut = {}
+    set_line_handler(fn,rem,_LineOut,on_line_output_char)
+    if rem and fn ~= primary_handler then
+        set_line_handler(primary_handler,false,_LineOut,on_line_output_char)
+    end
+end
 
 local path_pattern
 local tempfile
@@ -382,8 +400,8 @@ if GTK then
     path_pattern = '(.*)/[^%./]+%.%w+$'
     dirsep = '/'
 else
-    tempfile = '\\scite_temp1'
-    path_pattern = '(.*)\\[^%.\\]+%.%w+$'
+    tempfile = os.getenv 'TMP' .. '\\scite_temp1'
+    path_pattern = '(.*)[\\/][^%.\\/]+%.%w+$'
     dirsep = '\\'
 end
 
@@ -394,6 +412,12 @@ end
 
 local extman_path = path_of(props['ext.lua.startup.script'])
 local lua_path = scite_GetProp('ext.lua.directory',extman_path..dirsep..'scite_lua')
+
+fn,err = package.loadlib(extman_path.."/gui.dll","luaopen_gui")
+if fn then fn() else
+  --DISABLED:print(err)
+end
+
 
 function extman_Path()
     return extman_path
@@ -412,7 +436,7 @@ end
 if fn then
     fn() -- register spawner
 else
-    print('cannot load spawner '..err)
+    --DISABLED: print('cannot load spawner '..err)
 end
 
 -- a general popen function that uses the spawner library if found; otherwise falls back
@@ -452,12 +476,136 @@ function dirmask(mask,isdir)
     end
 end
 
+-- p = globtopattern(g)
+--
+-- Converts glob string (g) into Lua pattern string (p).
+-- Always succeeds.
+--
+-- Warning: could be better tested.
+--
+-- (c) 2008 D.Manura, Licensed under the same terms as Lua (MIT License).
+local function globtopattern(g)
+  -- Some useful references:
+  -- - apr_fnmatch in Apache APR.  For example,
+  --   http://apr.apache.org/docs/apr/1.3/group__apr__fnmatch.html
+  --   which cites POSIX 1003.2-1992, section B.6.
+
+  local p = "^"  -- pattern being built
+  local i = 0    -- index in g
+  local c        -- char at index i in g.
+
+  -- unescape glob char
+  local function unescape()
+    if c == '\\' then
+      i = i + 1; c = g:sub(i,i)
+      if c == '' then
+        p = '[^]'
+        return false
+      end
+    end
+    return true
+  end
+
+  -- escape pattern char
+  local function escape(c)
+    return c:match("^%w$") and c or '%' .. c
+  end
+
+  -- Convert tokens at end of charset.
+  local function charset_end()
+    while 1 do
+      if c == '' then
+        p = '[^]'
+        break
+      elseif c == ']' then
+        p = p .. ']'
+        break
+      else
+        if not unescape() then break end
+        local c1 = c
+        i = i + 1; c = g:sub(i,i)
+        if c == '' then
+          p = '[^]'
+          break
+        elseif c == '-' then
+          i = i + 1; c = g:sub(i,i)
+          if c == '' then
+            p = '[^]'
+            break
+          elseif c == ']' then
+            p = p .. escape(c1) .. '%-]'
+            break
+          else
+            if not unescape() then break end
+            p = p .. escape(c1) .. '-' .. escape(c)
+          end
+        elseif c == ']' then
+          p = p .. escape(c1) .. ']'
+          break
+        else
+          p = p .. escape(c1)
+          i = i - 1 -- put back
+        end
+      end
+      i = i + 1; c = g:sub(i,i)
+    end
+  end
+
+  -- Convert tokens in charset.
+  local function charset()
+    p = p .. '['
+    i = i + 1; c = g:sub(i,i)
+    if c == '' or c == ']' then
+      p = p .. '[^]'
+    elseif c == '^' or c == '!' then
+      p = p .. '^'
+      i = i + 1; c = g:sub(i,i)
+      if c == ']' then
+        -- ignored
+      else
+        charset_end()
+      end
+    else
+      charset_end()
+    end
+  end
+
+  -- Convert tokens.
+  while 1 do
+    i = i + 1; c = g:sub(i,i)
+    if c == '' then
+      p = p .. '$'
+      break
+    elseif c == '?' then
+      p = p .. '.'
+    elseif c == '*' then
+      p = p .. '.*'
+    elseif c == '[' then
+      charset()
+    elseif c == '\\' then
+      i = i + 1; c = g:sub(i,i)
+      if c == '' then
+        p = p .. '\\$'
+        break
+      end
+      p = p .. escape(c)
+    else
+      p = p .. escape(c)
+    end
+  end
+  return p
+end
+
 -- grab all files matching @mask, which is assumed to be a path with a wildcard.
+-- 2008-06-27 Now uses David Manura's globtopattern(), which is not fooled by cases
+-- like test.lua and test.lua~ !
 function scite_Files(mask)
-    local f,path,cmd,_
+    local f,path,pat,cmd,_
     if not GTK then
         cmd = dirmask(mask)
         path = mask:match('(.*\\)')  or '.\\'
+        local file = mask:match('([^\\]*)$')
+        pat = globtopattern(file)
     else
         cmd = 'ls -1 '..mask
         path = ''
@@ -465,9 +613,11 @@ function scite_Files(mask)
     f = scite_Popen(cmd)
     local files = {}
     if not f then return files end
+
     for line in f:lines() do
-   --     print(path..line)
-        append(files,path..line)
+        if not pat or line:match(pat) then
+            append(files,path..line)
+        end
     end
     f:close()
     return files
@@ -569,7 +719,7 @@ end
 
 local function check_gtk_alt_shortcut(shortcut,name)
    -- Alt+<letter> shortcuts don't work for GTK, so handle them directly...
-   local _,_,letter = shortcut:find('^Alt%+([A-Z])$')
+   local _,_,letter = shortcut:find('Alt%+([A-Z])$')
    if _ then
         alt_letter_map[letter:lower()] = name
         if not alt_letter_map_init then
@@ -644,6 +794,7 @@ function scite_Command(tbl)
   end
 end
 
+
 -- use this to launch Lua Tool menu commands directly by name
 -- (commands are not guaranteed to work properly if you just call the Lua function)
 function scite_MenuCommand(cmd)
@@ -701,13 +852,6 @@ function load_script_list(script_list,path)
     end
 end
 
---~ require"remdebug.engine"
---~ remdebug.engine.start()
-
-package.path  = package.path..';'.. props['SciteDefaultHome']..'/scripts/?.lua'
-require 'scite/scite' -- load scite module
-
-
 -- Load all scripts in the lua_path (usually 'scite_lua'), including within any subdirectories
 -- that aren't 'examples' or begin with a '_'
 local script_list = scite_Files(lua_path..dirsep..'*.lua')
@@ -715,16 +859,6 @@ load_script_list(script_list,lua_path)
 local dirs = scite_Directories(lua_path,'^_')
 for i,dir in ipairs(dirs) do
     load_script_list(scite_Files(dir..dirsep..'*.lua'),dir)
-end
-
-local custom_path = scite_GetProp('ext.lua.custom.dir')
-if custom_path then
-    local script_list = scite_Files(custom_path..dirsep..'*.lua')
-    load_script_list(script_list,custom_path)
-    local dirs = scite_Directories(custom_path,'^_')
-    for i,dir in ipairs(dirs) do
-        load_script_list(scite_Files(dir..dirsep..'*.lua'),dir)
-    end
 end
 
 function scite_WordAtPos(pos)
@@ -745,11 +879,15 @@ function scite_GetSelOrWord()
     end
 end
 
-scite_Command 'Reload Script|reload_script|Shift+Ctrl+R'
+--~ scite_Command 'Reload Script|reload_script|Shift+Ctrl+R'
 
-function reload_script()
-   current_file = scite_CurrentFile()
-   print('Reloading... '..current_file)
-   loaded[current_file] = false
-   silent_dofile(current_file)
-end
+--~ function reload_script()
+--~    current_file = scite_CurrentFile()
+--~    print('Reloading... '..current_file)
+--~    loaded[current_file] = false
+--~    silent_dofile(current_file)
+--~ end
+
+--~ require"remdebug.engine"
+--~ remdebug.engine.start()
+
